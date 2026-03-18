@@ -1,0 +1,49 @@
+services:
+  movie_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python main.py
+    depends_on: [movieRec_postgres]
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/MOVIEREC
+
+  streamlit_app:
+      build: .
+      command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+      ports:
+        - "8501:8501"
+      volumes:
+        - .:/MOVIEREC
+      depends_on:
+        - movieRec_postgres
+
+  movieRec_postgres:
+    container_name: movieRec_postgres
+    image: postgres:16
+    environment:
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD: db_password
+      POSTGRES_DB: movieRec
+    ports:
+      - "5402:5432"
+    volumes:
+      - movieRec_pg_data:/var/lib/postgresql/data
+    restart: always
+  
+  movieRec_pgadmin:
+    container_name: movieRec_pgadmin
+    image: dpage/pgadmin4:latest
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5052:80"
+    depends_on:
+      - movieRec_postgres
+    
+volumes:
+  movieRec_pg_data:

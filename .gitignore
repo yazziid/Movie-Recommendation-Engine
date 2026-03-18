@@ -1,0 +1,8 @@
+data/*
+ETL_notebooks/*
+pgdata/*
+info.py
+__pycache__/
+*.pth
+*.pkl
+user_movie_ratings.csv
