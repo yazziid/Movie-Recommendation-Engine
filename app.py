@@ -9,6 +9,32 @@ from info import TMDB_API_KEY  # Ensure this is your Bearer token
 from TwoTowerArchitecture import TwoTowerWithItemFeatures
 from sqlalchemy import create_engine, text
 
+def get_api_recommendations(user_ratings_df, movies_df, top_k=10):
+    liked_movies = user_ratings_df[user_ratings_df['rating'] >= 3]
+    if liked_movies.empty:
+        return []
+
+    liked_ml_ids = []
+    for tmdb_id in liked_movies['movie_id']:
+        match = movies_df[movies_df['movieid'] == tmdb_id]
+        if not match.empty:
+            liked_ml_ids.append(int(match.iloc[0]['movieid']))
+    
+    try:
+        # movie_app is the docker-compose service name
+        url = "http://movie_app:8001/recommend" 
+        payload = {"liked_ml_ids": liked_ml_ids, "top_k": top_k}
+        response = requests.post(url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            return response.json().get("recommendations", [])
+        else:
+            st.error(f"API Error: {response.text}")
+            return []
+    except requests.exceptions.RequestException as e:
+        st.error(f"Could not connect to recommendation engine: {e}")
+        return []
+
 @st.cache_data
 def load_ui_movies():
     #engine = create_engine("postgresql+psycopg2://db_user:db_password@localhost:5402/movieRec")
@@ -19,7 +45,7 @@ def load_ui_movies():
         WHERE original_title IS NOT NULL 
           AND original_title != 'NaN'
           AND revenue > 0 
-          AND lang_en = 1
+          AND lang_en
     """)
     
     with engine.connect() as conn: df = pd.read_sql_query(query, conn)
@@ -262,17 +288,14 @@ if needs_more:
     st.info(f"You have rated {num_ratings}/5 movies. Rate at least {5 - num_ratings} more to unlock AI recommendations!")
 
 if st.button("Generate AI Recommendations", disabled=needs_more):
-    model, artifacts = load_recommender_model()
-    
-    if model and artifacts and not movies_df.empty:
-        with st.spinner("Analyzing your tastes and fetching posters..."):
-            rec_ids = get_dynamic_recommendations(df, model, artifacts, movies_df)
+    if not movies_df.empty:
+        with st.spinner("Analyzing your tastes ..."):
+            rec_ids = get_api_recommendations(df, movies_df)
             
             if not rec_ids:
-                st.warning("Our database is too small! We couldn't match your rated movies to our training data. Try rating older or more popular movies.")
+                st.warning("No recommendations returned.")
             else:
                 final_table = extract_recommendation(rec_ids, movies_df)
-                
                 st.write("### Here are some movies you might like:")
                 
                 # Create the 4-column grid for recommendations

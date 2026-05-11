@@ -3,12 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python main.py
+    command: uvicorn Recommender_API:app --host 0.0.0.0 --port 8001 --reload
     depends_on: [movieRec_postgres]
     ports:
       - "8001:8001"
     volumes:
       - .:/MOVIEREC
+    networks:
+      - app_network
 
   streamlit_app:
       build: .
@@ -19,6 +21,9 @@ services:
         - .:/MOVIEREC
       depends_on:
         - movieRec_postgres
+        - movie_app
+      networks:
+      - app_network
 
   movieRec_postgres:
     container_name: movieRec_postgres
@@ -32,6 +37,8 @@ services:
     volumes:
       - movieRec_pg_data:/var/lib/postgresql/data
     restart: always
+    networks:
+      - app_network
   
   movieRec_pgadmin:
     container_name: movieRec_pgadmin
@@ -44,6 +51,12 @@ services:
       - "5052:80"
     depends_on:
       - movieRec_postgres
+    networks:
+      - app_network
     
 volumes:
   movieRec_pg_data:
+
+networks:
+  app_network:
+    driver: bridge
