@@ -20,14 +20,18 @@ class NewRatingsDataset(Dataset):
             torch.tensor(self.item_indices[idx], dtype=torch.long)
         )
 
-def run_incremental_training():
+def run_incremental_training(model_name="v1"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_dir = f"models/{model_name}"
+    artifacts_path = f"{model_dir}/model_artifacts.pkl"
+    weights_path = f"{model_dir}/two_tower_model.pth"
+    index_path = f"{model_dir}/movie_vectors.index"
 
     try:
-        with open("model_artifacts.pkl", "rb") as f:
+        with open(artifacts_path, "rb") as f:
             artifacts = pickle.load(f)
     except FileNotFoundError:
-        return False, "Model artifacts not found. Run base training first."
+        return False, f"Model artifacts for {model_name} not found."
 
     try:
         engine = create_engine("postgresql+psycopg2://db_user:db_password@movieRec_postgres:5432/movieRec")
@@ -36,7 +40,6 @@ def run_incremental_training():
         movies_df = pd.read_sql_query(text("SELECT movieId AS movieid FROM movies"), engine)
         movies_df["movieid"] = pd.to_numeric(movies_df["movieid"], errors="coerce")
         
-        # NEW: Read the user ratings directly from the SQL database
         user_df = pd.read_sql_query(text("SELECT movie_id, rating FROM user_watchlist"), engine)
     
     except Exception as e:
@@ -64,10 +67,10 @@ def run_incremental_training():
         item_feat_dim=3, 
         n_actors=artifacts["n_actors"],
         K=artifacts.get("K", 5),
-        emb_dim=128,   
-        hidden_dim=264
+        emb_dim=artifacts.get("emb_dim", 128),
+        hidden_dim=artifacts.get("hidden_dim", 264)
     )
-    model.load_state_dict(torch.load("two_tower_model.pth", map_location=device))
+    model.load_state_dict(torch.load(weights_path, map_location=device))
     model.to(device)
     model.train()
 
@@ -101,27 +104,18 @@ def run_incremental_training():
     with torch.no_grad():
         updated_item_vectors = model.compute_all_item_vectors(X_item, A_item).cpu()
 
-    torch.save(model.state_dict(), "two_tower_model.pth")
+    torch.save(model.state_dict(), weights_path)
     artifacts["item_vectors"] = updated_item_vectors
     
-    with open("model_artifacts.pkl", "wb") as f:
+    with open(artifacts_path, "wb") as f:
         pickle.dump(artifacts, f)
         
     try:
-        # Convert item vectors tensor to contiguous float32 NumPy array
         updated_vectors_np = updated_item_vectors.numpy().astype('float32')
-        dimension = updated_vectors_np.shape[1]
-
-        # Initialize standard IndexFlatIP for Inner Product (Cosine Similarity)
-        faiss_index = faiss.IndexFlatIP(dimension)
+        faiss_index = faiss.IndexFlatIP(updated_vectors_np.shape[1])
         faiss_index.add(updated_vectors_np)
-
-        # Overwrite file so that Recommender_API hot-reloads the new embeddings
-        faiss.write_index(faiss_index, "movie_vectors.index")
-        
+        faiss.write_index(faiss_index, index_path) # <-- Updated
     except Exception as e:
         return False, f"Model artifacts saved, but FAISS index rebuild failed: {e}"
-        
     
-
     return True, "Incremental training completed successfully!"
