@@ -1,18 +1,16 @@
 import streamlit as st
 from streamlit_searchbox import st_searchbox
 
-# --- Import our custom services ---
 from data_service import load_ui_movies, load_ratings_data, save_movie_rating, delete_movie_rating
 from tmdb_service import get_poster_url, search_tmdb_suggestions
 from api_service import get_api_recommendations, extract_recommendation
 
 st.set_page_config(page_title="Movie Recommender", layout="wide")
 
-# --- Initialization ---
 movies_df = load_ui_movies()
 df_ratings = load_ratings_data()
 
-st.title("🍿 Movie Rating App")
+st.title(" Movie Rating App")
 
 # --- Search Section ---
 selected_movie = st_searchbox(
@@ -45,7 +43,7 @@ if selected_movie:
 
 # --- History Section ---
 st.divider()
-st.subheader("📝 Your Ratings")
+st.subheader("Your Ratings")
 
 if not df_ratings.empty:
     cols = st.columns(4)
@@ -79,7 +77,7 @@ else:
 
 # --- AI Recommendations Section ---
 st.divider()
-st.subheader("🤖 Recommended for You")
+st.subheader(" Recommended for You")
 
 num_ratings = len(df_ratings)
 needs_more = num_ratings < 5
