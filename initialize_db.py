@@ -184,6 +184,19 @@ cur.execute("""
       AND a."movieid" IS NULL;
 """)
 
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS user_watchlist (
+        movie_id INT PRIMARY KEY,
+        title TEXT,
+        year TEXT,
+        rating INT,
+        poster_path TEXT,
+        FOREIGN KEY (movie_id) REFERENCES links(movieId)
+    );
+""")
+
+
+
 connection.commit()
 
 cur.close()

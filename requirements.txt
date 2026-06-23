@@ -6,3 +6,7 @@ streamlit-searchbox
 torch
 torchvision
 fastapi
+uvicorn
+pydantic
+pytest
+faiss-cpu

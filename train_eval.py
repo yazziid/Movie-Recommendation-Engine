@@ -87,6 +87,22 @@ print("top 10 recommendation for user 1:\n")
 recommendation_table = extract_recommendation(rec_ids, movies_df)
 print(recommendation_table)
 
+import faiss
+
+# 1. Extract item vectors and convert them to a contiguous NumPy float32 array
+item_vectors_np = item_vectors.cpu().numpy().astype('float32')
+dimension = item_vectors_np.shape[1]
+
+# 2. Instantiate a FAISS Index for Inner Product (Dot Product) search
+index = faiss.IndexFlatIP(dimension)
+
+# 3. Add the vectors to the index
+index.add(item_vectors_np)
+
+# 4. Save the index binary to disk
+faiss.write_index(index, "movie_vectors.index")
+print("FAISS Vector Index successfully built and saved.")
+
 
 torch.save(model.state_dict(), "two_tower_model.pth")
 

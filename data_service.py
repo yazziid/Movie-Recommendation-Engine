@@ -1,14 +1,13 @@
 import pandas as pd
-import os
 from sqlalchemy import create_engine, text
 import streamlit as st
 
-CSV_FILE = "user_movie_ratings.csv"
+# Centralized engine pointing to your Docker network database
+engine = create_engine("postgresql+psycopg2://db_user:db_password@movieRec_postgres:5432/movieRec")
 
 @st.cache_data
 def load_ui_movies():
     """Loads and caches the movie metadata from PostgreSQL."""
-    engine = create_engine("postgresql+psycopg2://db_user:db_password@movieRec_postgres:5432/movieRec")
     query = text("""
         SELECT movieId AS movieid, original_title, release_date, overview 
         FROM movies
@@ -19,41 +18,43 @@ def load_ui_movies():
     """)
     with engine.connect() as conn: 
         df = pd.read_sql_query(query, conn)
-        
     df["movieid"] = pd.to_numeric(df["movieid"], errors="coerce")
     return df
 
 def load_ratings_data():
-    """Loads the user's ratings from the local CSV."""
-    if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE)
-        if "poster_path" not in df.columns:
-            df["poster_path"] = ""
-        return df
-    return pd.DataFrame(columns=["movie_id", "title", "year", "rating", "poster_path"])
-
-def save_ratings_data(df):
-    """Saves the ratings dataframe to CSV."""
-    df.to_csv(CSV_FILE, index=False)
+    """Loads the user's watchlist directly from PostgreSQL instead of CSV."""
+    query = text("SELECT movie_id, title, year, rating, poster_path FROM user_watchlist")
+    with engine.connect() as conn:
+        df = pd.read_sql_query(query, conn)
+    return df
 
 def save_movie_rating(movie, rating):
-    """Adds or updates a movie rating in the CSV."""
-    df = load_ratings_data()
+    """Inserts or updates a movie rating directly in the SQL database."""
     poster = movie.get("poster_path") or ""
+    year = movie["release_date"][:4] if movie.get("release_date") else "N/A"
     
-    if movie["id"] in df["movie_id"].values:
-        df.loc[df["movie_id"] == movie["id"], "rating"] = rating
-        if poster:
-            df.loc[df["movie_id"] == movie["id"], "poster_path"] = poster
-    else:
-        new_row = {
+    # PostgreSQL UPSERT statement (ON CONFLICT DO UPDATE)
+    upsert_query = text("""
+        INSERT INTO user_watchlist (movie_id, title, year, rating, poster_path)
+        VALUES (:movie_id, :title, :year, :rating, :poster_path)
+        ON CONFLICT (movie_id) 
+        DO UPDATE SET rating = EXCLUDED.rating, poster_path = EXCLUDED.poster_path;
+    """)
+    
+    with engine.connect() as conn:
+        conn.execute(upsert_query, {
             "movie_id": movie["id"],
             "title": movie["title"],
-            "year": movie["release_date"][:4] if movie.get("release_date") else "N/A",
+            "year": year,
             "rating": rating,
             "poster_path": poster
-        }
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        
-    save_ratings_data(df)
+        })
+        conn.commit()
     return movie['title']
+
+def delete_movie_rating(movie_id):
+    """Deletes a movie from the user's database watchlist."""
+    delete_query = text("DELETE FROM user_watchlist WHERE movie_id = :movie_id")
+    with engine.connect() as conn:
+        conn.execute(delete_query, {"movie_id": movie_id})
+        conn.commit()

@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_searchbox import st_searchbox
 
 # --- Import our custom services ---
-from data_service import load_ui_movies, load_ratings_data, save_ratings_data, save_movie_rating
+from data_service import load_ui_movies, load_ratings_data, save_movie_rating, delete_movie_rating
 from tmdb_service import get_poster_url, search_tmdb_suggestions
 from api_service import get_api_recommendations, extract_recommendation
 
@@ -72,8 +72,7 @@ if not df_ratings.empty:
                     st.rerun()
                     
                 if c2.button("Delete", key=f"del_{row['movie_id']}"):
-                    df_new = df_ratings[df_ratings["movie_id"] != row["movie_id"]]
-                    save_ratings_data(df_new)
+                    delete_movie_rating(row["movie_id"])
                     st.rerun()
 else:
     st.info("Your watchlist is currently empty.")

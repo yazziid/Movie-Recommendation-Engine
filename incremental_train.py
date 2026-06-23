@@ -1,6 +1,7 @@
 import pandas as pd
 import torch
 import pickle
+import faiss
 from sqlalchemy import create_engine, text
 from torch.utils.data import Dataset, DataLoader
 from TwoTowerArchitecture import TwoTowerWithItemFeatures, inbatch_bpr_loss
@@ -19,7 +20,7 @@ class NewRatingsDataset(Dataset):
             torch.tensor(self.item_indices[idx], dtype=torch.long)
         )
 
-def run_incremental_training(csv_path="user_movie_ratings.csv"):
+def run_incremental_training():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     try:
@@ -29,13 +30,17 @@ def run_incremental_training(csv_path="user_movie_ratings.csv"):
         return False, "Model artifacts not found. Run base training first."
 
     try:
-        #engine = create_engine("postgresql+psycopg2://db_user:db_password@localhost:5402/movieRec")
         engine = create_engine("postgresql+psycopg2://db_user:db_password@movieRec_postgres:5432/movieRec")
+        
+        # Load movies vocabulary schema
         movies_df = pd.read_sql_query(text("SELECT movieId AS movieid FROM movies"), engine)
         movies_df["movieid"] = pd.to_numeric(movies_df["movieid"], errors="coerce")
-        user_df = pd.read_csv(csv_path)
+        
+        # NEW: Read the user ratings directly from the SQL database
+        user_df = pd.read_sql_query(text("SELECT movie_id, rating FROM user_watchlist"), engine)
+    
     except Exception as e:
-        return False, f"Data loading failed: {e}"
+        return False, f"Database data loading failed: {e}"
 
     liked_movies = user_df[user_df['rating'] >= 3]
     if liked_movies.empty:
@@ -101,5 +106,22 @@ def run_incremental_training(csv_path="user_movie_ratings.csv"):
     
     with open("model_artifacts.pkl", "wb") as f:
         pickle.dump(artifacts, f)
+        
+    try:
+        # Convert item vectors tensor to contiguous float32 NumPy array
+        updated_vectors_np = updated_item_vectors.numpy().astype('float32')
+        dimension = updated_vectors_np.shape[1]
+
+        # Initialize standard IndexFlatIP for Inner Product (Cosine Similarity)
+        faiss_index = faiss.IndexFlatIP(dimension)
+        faiss_index.add(updated_vectors_np)
+
+        # Overwrite file so that Recommender_API hot-reloads the new embeddings
+        faiss.write_index(faiss_index, "movie_vectors.index")
+        
+    except Exception as e:
+        return False, f"Model artifacts saved, but FAISS index rebuild failed: {e}"
+        
+    
 
     return True, "Incremental training completed successfully!"
