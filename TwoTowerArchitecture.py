@@ -80,9 +80,8 @@ def train_model(
     A_item,
     device,
     epochs=5,
-    batch_size=1024
+    batch_size=4096 # decrease to 2048 then 1024 if too much
 ):
-
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -98,9 +97,10 @@ def train_model(
     )
 
     model.to(device)
-
     X_item = X_item.to(device)
     A_item = A_item.to(device)
+
+    epoch_history = []
 
     for epoch in range(epochs):
         model.train()
@@ -119,4 +119,13 @@ def train_model(
             loss.backward()
             optimizer.step()
             losses.append(loss.item())
-        print(f"Epoch {epoch}: {sum(losses)/len(losses):.4f}")
+        
+        avg_loss = sum(losses)/len(losses)
+        print(f"Epoch {epoch}: {avg_loss:.4f}")
+        
+        epoch_history.append({
+            "epoch": epoch + 1,
+            "train_loss": avg_loss
+        })
+        
+    return epoch_history

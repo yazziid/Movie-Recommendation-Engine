@@ -28,9 +28,11 @@ class TwoTowerDataset(Dataset):
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#engine = create_engine("postgresql+psycopg2://db_user:db_password@localhost:5402/movieRec")
+# Use this one when running locally:
+engine = create_engine("postgresql+psycopg2://db_user:db_password@localhost:5402/movieRec")
 
-engine = create_engine("postgresql+psycopg2://db_user:db_password@movieRec_postgres:5432/movieRec")
+# Use this one when running inside Docker:
+#engine = create_engine("postgresql+psycopg2://db_user:db_password@movieRec_postgres:5432/movieRec")
 
 def load_table(table_name):
     q = text(f'SELECT * FROM "{table_name}"')
@@ -54,8 +56,25 @@ covered_movielensids = set(
 )
 
 
+min_movie_rating_count = 5
+min_user_rating_count = 25
+num_users_to_keep = 50000
+
 # Train test split
 ratings_cov = ratings_df[ratings_df["movielensid"].isin(covered_movielensids)].copy()
+
+## training on a subset
+movie_counts = ratings_cov['movielensid'].value_counts()
+popular_movies = movie_counts[movie_counts >= min_movie_rating_count].index # Filter out movies with less than min_movie_rating_count ratings
+ratings_cov = ratings_cov[ratings_cov['movielensid'].isin(popular_movies)]
+
+user_counts = ratings_cov['userid'].value_counts()
+active_users = user_counts[user_counts >= min_user_rating_count].index # Filter out users with fewer than min_user_rating_count ratings)
+ratings_cov = ratings_cov[ratings_cov['userid'].isin(active_users)]
+
+np.random.seed(42)
+#sampled_users = np.random.choice(ratings_cov['userid'].unique(), size=num_users_to_keep, replace=False)
+#ratings_cov = ratings_cov[ratings_cov['userid'].isin(sampled_users)].copy()
 
 ratings_cov = ratings_cov.sample(frac=1, random_state=42).reset_index(drop=True)
 
@@ -92,7 +111,7 @@ def build_metadata_features(movies_df, covered_tmdb, movieid2idx):
 
     feature_cols = ["runtime", "budget", "revenue"]
 
-    X_item = movie_meta[feature_cols].fillna(0).values
+    X_item = movie_meta[feature_cols].fillna(0).values.copy()
     X_item = torch.tensor(X_item, dtype=torch.float32)
     return X_item
 
