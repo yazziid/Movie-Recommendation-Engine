@@ -14,10 +14,10 @@ from two_tower_metrics import calculate_metrics
 def main():
     parser = argparse.ArgumentParser(description="Train Two-Tower Recommendation Model")
     parser.add_argument("--model_name", type=str, default="v1", help="Name of the model version folder")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=25, help="Number of training epochs")
     parser.add_argument("--emb_dim", type=int, default=128, help="Embedding dimension")
     parser.add_argument("--hidden_dim", type=int, default=264, help="Hidden layer dimension")
-    parser.add_argument("--batch_size", type=int, default=3072, help="Training batch size")
+    parser.add_argument("--batch_size", type=int, default=4096, help="Training batch size")
     args = parser.parse_args()
 
     # Versioning & Metrics Directories

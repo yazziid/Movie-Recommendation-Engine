@@ -79,7 +79,7 @@ def train_model(
     X_item,
     A_item,
     device,
-    epochs=5,
+    epochs=25,
     batch_size=4096 # decrease to 2048 then 1024 if too much
 ):
     train_loader = DataLoader(
